@@ -1,0 +1,105 @@
+# Miscellaneous
+*.class
+*.log
+*.pyc
+*.swp
+.DS_Store
+.atom/
+.build/
+.buildlog/
+.history
+.svn/
+.swiftpm/
+migrate_working_dir/
+
+# IntelliJ related
+*.iml
+*.ipr
+*.iws
+.idea/
+
+# The .vscode folder contains launch configuration and tasks you configure in
+# VS Code which you may wish to be included in version control, so this line
+# is commented out by default.
+#.vscode/
+
+# Flutter/Dart/Pub related
+**/doc/api/
+**/ios/Flutter/.last_build_id
+.dart_tool/
+.flutter-plugins-dependencies
+.pub-cache/
+.pub/
+/build/
+/coverage/
+
+# Symbolication related
+app.*.symbols
+
+# Obfuscation related
+app.*.map.json
+
+# Android Studio will place build artifacts here
+/android/app/debug
+/android/app/profile
+/android/app/release
+
+# Sensitive data - PIN authentication and database
+*.db
+*.db-shm
+*.db-wal
+mindflow.db
+
+# API keys and secrets
+.env
+*.env
+.env.*
+secrets.json
+*.secrets.json
+config/secrets.json
+lib/config/secrets.dart
+lib/config/api_keys.dart
+
+# Android signing
+*.jks
+*.keystore
+android/app/release.jks
+android/app/debug.jks
+android/keystore.properties
+
+# iOS signing and provisioning
+*.mobileprovision
+*.p12
+*.pem
+ios/*.cer
+ios/*.p12
+ios/Runner.xcworkspace/xcshareddata/Runner.xcscheme
+
+# Firebase and Google Services
+google-services.json
+GoogleService-Info.plist
+firebase_*.json
+android/app/google-services.json
+ios/Runner/GoogleService-Info.plist
+
+# App distribution certificates
+*.cert
+*.certificate
+*.key
+
+# User-specific sensitive data
+user_data.json
+local_config.json
+*.local.dart
+
+# Drift database generated files (only include .dart files)
+lib/database/database.g.dart
+
+# Claude Code memory (may contain sensitive information)
+.claude/
+memory/
+
+# OS generated files
+Thumbs.db
+.DS_Store
+.directory
