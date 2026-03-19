@@ -8,6 +8,7 @@ import 'features/auth/pin_lock/pin_lock_screen.dart';
 import 'features/journal/journal_editor_screen.dart';
 import 'features/journal/home_screen.dart';
 import 'features/journal/journal_list_screen.dart';
+import 'features/journal/insights_screen.dart';
 import 'providers/pin_auth_provider.dart';
 import 'utils/responsive.dart';
 
@@ -53,18 +54,24 @@ class MindFlowApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'MindFlow',
-      debugShowCheckedModeBanner: false,
-      theme: AppTheme.lightTheme,
-      initialRoute: '/',
-      routes: {
-        '/': (context) => const SplashScreen(),
-        '/pin': (context) => const PinLockScreen(),
-        '/home': (context) => const JournalHomeScreen(),
-        '/journal': (context) => const JournalListScreen(),
-        '/editor': (context) => const JournalEditorScreen(),
-      },
+    return MediaQuery(
+      // Disable system font scaling - keep app font sizes consistent
+      // Preserve all other MediaQuery data (padding, size, etc.)
+      data: MediaQuery.of(context).copyWith(textScaleFactor: 1.0),
+      child: MaterialApp(
+        title: 'MindFlow',
+        debugShowCheckedModeBanner: false,
+        theme: AppTheme.lightTheme,
+        initialRoute: '/',
+        routes: {
+          '/': (context) => const SplashScreen(),
+          '/pin': (context) => const PinLockScreen(),
+          '/home': (context) => const JournalHomeScreen(),
+          '/journal': (context) => const JournalListScreen(),
+          '/insights': (context) => const InsightsScreen(),
+          '/editor': (context) => const JournalEditorScreen(),
+        },
+      ),
     );
   }
 }

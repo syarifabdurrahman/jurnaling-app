@@ -46,10 +46,69 @@ class _JournalEditorScreenState extends ConsumerState<JournalEditorScreen> {
     _quillController = QuillController.basic();
     _toolbarScrollController = ScrollController();
     _titleFocus.requestFocus();
+
+    // Listen to selection changes to update toolbar
+    _quillController.addListener(_onSelectionChanged);
+
+    // Load existing entry if editing
+    if (widget.entryId != null) {
+      _loadExistingEntry();
+    }
+  }
+
+  void _onSelectionChanged() {
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  Future<void> _loadExistingEntry() async {
+    try {
+      final entryId = int.parse(widget.entryId!);
+      final entry = await ref.read(journalEntryProvider(entryId).future);
+      if (entry != null && mounted) {
+        setState(() {
+          _titleController.text = entry.title;
+
+          // Load content
+          try {
+            final dynamic decoded = jsonDecode(entry.content);
+            final document = Document.fromJson(decoded is List ? decoded : [decoded]);
+            _quillController.document = document;
+          } catch (e) {
+            // Content parse error, keep empty document
+          }
+
+          // Load mood
+          if (entry.mood.isNotEmpty) {
+            _selectedMood = MoodType.values.firstWhere(
+              (m) => m.name.toLowerCase() == entry.mood.toLowerCase(),
+              orElse: () => MoodType.neutral,
+            );
+          }
+
+          // Load images
+          if (entry.imagePaths != null && entry.imagePaths!.isNotEmpty) {
+            try {
+              final paths = jsonDecode(entry.imagePaths!);
+              if (paths is List) {
+                _selectedImages.clear();
+                _selectedImages.addAll(paths.cast<String>().map((p) => File(p)));
+              }
+            } catch (e) {
+              // Image parse error
+            }
+          }
+        });
+      }
+    } catch (e) {
+      // Error loading entry, continue with empty state
+    }
   }
 
   @override
   void dispose() {
+    _quillController.removeListener(_onSelectionChanged);
     _quillController.dispose();
     _toolbarScrollController.dispose();
     _titleController.dispose();
@@ -97,51 +156,81 @@ class _JournalEditorScreenState extends ConsumerState<JournalEditorScreen> {
         ? jsonEncode(_selectedImages.map((f) => f.path).toList())
         : null;
 
-    final entry = JournalEntriesCompanion.insert(
-      title: _titleController.text.trim(),
-      content: jsonEncode(contentJson),
-      createdAt: now,
-      updatedAt: now,
-      mood: drift.Value(moodValue),
-      imagePaths: imagePathsJson != null ? drift.Value(imagePathsJson) : const drift.Value.absent(),
-    );
-
     try {
-      await ref.read(journalOperationsProvider).createEntry(entry);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                const Icon(Icons.check_circle_rounded, color: Colors.white),
-                const SizedBox(width: 12),
-                Text(
-                  'Saved successfully',
-                  style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w600),
-                ),
-              ],
-            ),
-            backgroundColor: AppColors.accentPrimary,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            margin: const EdgeInsets.all(16),
-          ),
+      if (widget.entryId != null) {
+        // Update existing entry
+        final entryId = int.parse(widget.entryId!);
+        final entry = JournalEntriesCompanion(
+          id: drift.Value(entryId),
+          title: drift.Value(_titleController.text.trim()),
+          content: drift.Value(jsonEncode(contentJson)),
+          updatedAt: drift.Value(now),
+          mood: drift.Value(moodValue),
+          imagePaths: imagePathsJson != null ? drift.Value(imagePathsJson) : const drift.Value.absent(),
         );
-        Navigator.of(context).pop(true);
+
+        final success = await ref.read(journalOperationsProvider).updateEntry(entry);
+        if (success && mounted) {
+          _showSuccessSnackBar();
+          Navigator.of(context).pop(true);
+        } else if (mounted) {
+          _showErrorSnackBar('Failed to update journal');
+        }
+      } else {
+        // Create new entry
+        final entry = JournalEntriesCompanion.insert(
+          title: _titleController.text.trim(),
+          content: jsonEncode(contentJson),
+          createdAt: now,
+          updatedAt: now,
+          mood: drift.Value(moodValue),
+          imagePaths: imagePathsJson != null ? drift.Value(imagePathsJson) : const drift.Value.absent(),
+        );
+
+        await ref.read(journalOperationsProvider).createEntry(entry);
+        if (mounted) {
+          _showSuccessSnackBar();
+          Navigator.of(context).pop(true);
+        }
       }
     } catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to save: $error'),
-            backgroundColor: AppColors.moodAnxious,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            margin: const EdgeInsets.all(16),
-          ),
-        );
+        _showErrorSnackBar('Failed to save: $error');
       }
     }
+  }
+
+  void _showSuccessSnackBar() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(Icons.check_circle_rounded, color: Colors.white),
+            const SizedBox(width: 12),
+            Text(
+              'Saved successfully',
+              style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w600),
+            ),
+          ],
+        ),
+        backgroundColor: AppColors.accentPrimary,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        margin: const EdgeInsets.all(16),
+      ),
+    );
+  }
+
+  void _showErrorSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: AppColors.moodAnxious,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        margin: const EdgeInsets.all(16),
+      ),
+    );
   }
 
   void _showTitleRequiredSnackBar() {
@@ -608,97 +697,51 @@ class _JournalEditorScreenState extends ConsumerState<JournalEditorScreen> {
             controller: _toolbarScrollController,
             child: Row(
               children: [
-                _buildToolbarButton(Icons.format_bold_rounded, () {
-                  // Toggle bold using Quill
-                  final style = Attribute.bold;
-                  if (_quillController.getSelectionStyle().attributes.containsKey(style.key)) {
-                    _quillController.formatText(
-                      _quillController.selection.start,
-                      _quillController.selection.end - _quillController.selection.start,
-                      Attribute.clone(style, null),
-                    );
-                  } else {
-                    _quillController.formatText(
-                      _quillController.selection.start,
-                      _quillController.selection.end - _quillController.selection.start,
-                      style,
-                    );
-                  }
-                }),
+                _buildToolbarButton(
+                  Icons.format_bold_rounded,
+                  () => _toggleFormat(Attribute.bold),
+                  isActive: _isFormatActive(Attribute.bold),
+                ),
                 const SizedBox(width: 8),
-                _buildToolbarButton(Icons.format_italic_rounded, () {
-                  // Toggle italic
-                  final style = Attribute.italic;
-                  if (_quillController.getSelectionStyle().attributes.containsKey(style.key)) {
-                    _quillController.formatText(
-                      _quillController.selection.start,
-                      _quillController.selection.end - _quillController.selection.start,
-                      Attribute.clone(style, null),
-                    );
-                  } else {
-                    _quillController.formatText(
-                      _quillController.selection.start,
-                      _quillController.selection.end - _quillController.selection.start,
-                      style,
-                    );
-                  }
-                }),
+                _buildToolbarButton(
+                  Icons.format_italic_rounded,
+                  () => _toggleFormat(Attribute.italic),
+                  isActive: _isFormatActive(Attribute.italic),
+                ),
                 const SizedBox(width: 8),
-                _buildToolbarButton(Icons.format_underlined_rounded, () {
-                  // Toggle underline
-                  final style = Attribute.underline;
-                  if (_quillController.getSelectionStyle().attributes.containsKey(style.key)) {
-                    _quillController.formatText(
-                      _quillController.selection.start,
-                      _quillController.selection.end - _quillController.selection.start,
-                      Attribute.clone(style, null),
-                    );
-                  } else {
-                    _quillController.formatText(
-                      _quillController.selection.start,
-                      _quillController.selection.end - _quillController.selection.start,
-                      style,
-                    );
-                  }
-                }),
+                _buildToolbarButton(
+                  Icons.format_underlined_rounded,
+                  () => _toggleFormat(Attribute.underline),
+                  isActive: _isFormatActive(Attribute.underline),
+                ),
                 const SizedBox(width: 8),
-                _buildToolbarButton(Icons.format_list_bulleted_rounded, () {
-                  // Toggle bullet list
-                  final style = Attribute.ul;
-                  if (_quillController.getSelectionStyle().attributes.containsKey(style.key)) {
-                    _quillController.formatText(
-                      _quillController.selection.start,
-                      _quillController.selection.end - _quillController.selection.start,
-                      Attribute.clone(style, null),
-                    );
-                  } else {
-                    _quillController.formatText(
-                      _quillController.selection.start,
-                      _quillController.selection.end - _quillController.selection.start,
-                      style,
-                    );
-                  }
-                }),
+                _buildToolbarButton(
+                  Icons.format_list_bulleted_rounded,
+                  () => _toggleFormat(Attribute.ul),
+                  isActive: _isFormatActive(Attribute.ul),
+                ),
                 const SizedBox(width: 8),
                 _buildToolbarButton(Icons.text_fields_rounded, () {
                   _showTypographySettings(context);
                 }),
                 const SizedBox(width: 8),
-                _buildToolbarButton(Icons.format_align_left_rounded, () {
-                  _quillController.formatText(
-                    _quillController.selection.start,
-                    _quillController.selection.end - _quillController.selection.start,
-                    Attribute.leftAlignment,
-                  );
-                }),
+                _buildToolbarButton(
+                  Icons.format_align_left_rounded,
+                  () => _setAlignment(Attribute.leftAlignment),
+                  isActive: _isAlignmentActive(Attribute.leftAlignment),
+                ),
                 const SizedBox(width: 8),
-                _buildToolbarButton(Icons.format_align_center_rounded, () {
-                  _quillController.formatText(
-                    _quillController.selection.start,
-                    _quillController.selection.end - _quillController.selection.start,
-                    Attribute.centerAlignment,
-                  );
-                }),
+                _buildToolbarButton(
+                  Icons.format_align_center_rounded,
+                  () => _setAlignment(Attribute.centerAlignment),
+                  isActive: _isAlignmentActive(Attribute.centerAlignment),
+                ),
+                const SizedBox(width: 8),
+                _buildToolbarButton(
+                  Icons.format_align_right_rounded,
+                  () => _setAlignment(Attribute.rightAlignment),
+                  isActive: _isAlignmentActive(Attribute.rightAlignment),
+                ),
               ],
             ),
           ),
@@ -715,6 +758,15 @@ class _JournalEditorScreenState extends ConsumerState<JournalEditorScreen> {
                 placeholder: 'Write your thoughts...',
                 padding: EdgeInsets.zero,
                 scrollable: true,
+                customStyles: DefaultStyles(
+                  paragraph: DefaultTextBlockStyle(
+                    _getCurrentTextStyle(),
+                    HorizontalSpacing.zero,
+                    const VerticalSpacing(0, 0),
+                    const VerticalSpacing(0, 0),
+                    null,
+                  ),
+                ),
               ),
             ),
           ),
@@ -928,23 +980,85 @@ class _JournalEditorScreenState extends ConsumerState<JournalEditorScreen> {
     }
   }
 
-  Widget _buildToolbarButton(IconData icon, VoidCallback onTap) {
+  Widget _buildToolbarButton(IconData icon, VoidCallback onTap, {bool isActive = false}) {
     return Container(
       width: 40,
       height: 40,
       decoration: BoxDecoration(
-        color: AppColors.secondarySoft.withValues(alpha: 0.4),
+        color: isActive
+            ? AppColors.accentPrimary
+            : AppColors.secondarySoft.withValues(alpha: 0.4),
         borderRadius: BorderRadius.circular(12),
+        border: isActive
+            ? Border.all(color: AppColors.accentPrimary, width: 2)
+            : null,
       ),
       child: Material(
         color: Colors.transparent,
         child: InkWell(
           onTap: onTap,
           borderRadius: BorderRadius.circular(12),
-          child: Icon(icon, size: 20, color: AppColors.textHighContrast),
+          child: Icon(
+            icon,
+            size: 20,
+            color: isActive ? Colors.white : AppColors.textHighContrast,
+          ),
         ),
       ),
     );
+  }
+
+  // Check if a format attribute is active at current selection
+  bool _isFormatActive(Attribute attribute) {
+    final style = _quillController.getSelectionStyle();
+    return style.attributes.containsKey(attribute.key);
+  }
+
+  // Check if an alignment attribute is active
+  bool _isAlignmentActive(Attribute attribute) {
+    final style = _quillController.getSelectionStyle();
+    return style.attributes.containsKey(attribute.key);
+  }
+
+  // Toggle a format attribute
+  void _toggleFormat(Attribute attribute) {
+    if (_isFormatActive(attribute)) {
+      _quillController.formatText(
+        _quillController.selection.start,
+        _quillController.selection.end - _quillController.selection.start,
+        Attribute.clone(attribute, null),
+      );
+    } else {
+      _quillController.formatText(
+        _quillController.selection.start,
+        _quillController.selection.end - _quillController.selection.start,
+        attribute,
+      );
+    }
+    // Refresh UI to show updated active state
+    setState(() {});
+  }
+
+  // Set text alignment
+  void _setAlignment(Attribute alignment) {
+    _quillController.formatText(
+      _quillController.selection.start,
+      _quillController.selection.end - _quillController.selection.start,
+      alignment,
+    );
+    // Refresh UI to show updated active state
+    setState(() {});
+  }
+
+  TextStyle _getCurrentTextStyle() {
+    switch (_selectedFont) {
+      case 'Lora':
+        return GoogleFonts.lora(fontSize: _fontSize, color: AppColors.textHighContrast);
+      case 'Playfair Display':
+        return GoogleFonts.playfairDisplay(fontSize: _fontSize, color: AppColors.textHighContrast);
+      default:
+        return GoogleFonts.plusJakartaSans(fontSize: _fontSize, color: AppColors.textHighContrast);
+    }
   }
 
   Widget _buildSaveButton(BuildContext context) {

@@ -10,6 +10,7 @@ import '../../utils/responsive.dart';
 import '../../providers/journal_provider.dart';
 import '../../database/database.dart';
 import 'journal_editor_screen.dart';
+import 'journal_detail_screen.dart';
 
 /// Journal list screen with search and card layout
 class JournalListScreen extends ConsumerStatefulWidget {
@@ -21,12 +22,33 @@ class JournalListScreen extends ConsumerStatefulWidget {
 
 class _JournalListScreenState extends ConsumerState<JournalListScreen> {
   final TextEditingController _searchController = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
   String _searchQuery = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(_onScroll);
+  }
 
   @override
   void dispose() {
     _searchController.dispose();
+    _scrollController.dispose();
     super.dispose();
+  }
+
+  void _onScroll() {
+    if (_isBottom) {
+      ref.read(paginatedEntriesProvider.notifier).loadMore();
+    }
+  }
+
+  bool get _isBottom {
+    if (!_scrollController.hasClients) return false;
+    final maxScroll = _scrollController.position.maxScrollExtent;
+    final currentScroll = _scrollController.position.pixels;
+    return currentScroll >= (maxScroll * 0.9);
   }
 
   @override
@@ -35,65 +57,62 @@ class _JournalListScreenState extends ConsumerState<JournalListScreen> {
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      body: Stack(
-        children: [
-          // Background
-          _buildBackground(),
-          // Main content
-          SafeArea(
-            child: Column(
-              children: [
-                _buildHeader(),
-                // Search bar
-                _buildSearchBar(),
-                Expanded(
-                  child: entriesAsync.when(
-                    data: (entries) {
-                      // Filter by search query
-                      final filteredEntries = _filterEntries(entries);
-                      return RefreshIndicator(
-                        onRefresh: () async {
-                          ref.invalidate(journalEntriesProvider);
-                        },
-                        color: AppColors.accentPrimary,
-                        backgroundColor: Colors.white,
-                        child: Container(
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: const BorderRadius.only(
-                              topLeft: Radius.circular(28),
-                              topRight: Radius.circular(28),
-                            ),
-                          ),
+      body: SwipeNavigator(
+        currentRoute: '/journal',
+        onSwipeLeft: () => Navigator.of(context).pushReplacementNamed('/insights'),
+        onSwipeRight: () => Navigator.of(context).pushReplacementNamed('/home'),
+        child: Stack(
+          children: [
+            // Background
+            _buildBackground(),
+            // Main content
+            SafeArea(
+              child: Column(
+                children: [
+                  _buildHeader(),
+                  // Search bar
+                  _buildSearchBar(),
+                  Expanded(
+                    child: entriesAsync.when(
+                      data: (entries) {
+                        return Padding(
+                          padding: const EdgeInsets.all(16),
                           child: ClipRRect(
                             borderRadius: const BorderRadius.only(
                               topLeft: Radius.circular(28),
                               topRight: Radius.circular(28),
                             ),
-                            child: filteredEntries.isEmpty
+                            child: entries.isEmpty
                                 ? _buildEmptyState()
-                                : _buildJournalGrid(filteredEntries),
+                                : RefreshIndicator(
+                                    onRefresh: () async {
+                                      ref.invalidate(journalEntriesProvider);
+                                    },
+                                    color: AppColors.accentPrimary,
+                                    backgroundColor: Colors.white,
+                                    child: _buildJournalGrid(entries),
+                                  ),
                           ),
-                        ),
-                      );
-                    },
-                    loading: () => const Center(
-                      child: CircularProgressIndicator(color: AppColors.accentPrimary),
+                        );
+                      },
+                      loading: () => const Center(
+                        child: CircularProgressIndicator(color: AppColors.accentPrimary),
+                      ),
+                      error: (error, _) => _buildErrorState(error),
                     ),
-                    error: (error, _) => _buildErrorState(error),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-          // Floating Nav Pill
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: context.bottomPadding + 16,
-            child: _buildFloatingNavPill(context),
-          ),
-        ],
+            // Floating Nav Pill
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: context.bottomPadding + 16,
+              child: _buildFloatingNavPill(context),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -274,7 +293,9 @@ class _JournalListScreenState extends ConsumerState<JournalListScreen> {
                 const SizedBox(width: 4),
                 _buildNavItem(Icons.book_rounded, 'Journal', true, () {}),
                 const SizedBox(width: 4),
-                _buildNavItem(Icons.insights_rounded, 'Insights', false, () {}),
+                _buildNavItem(Icons.insights_rounded, 'Insights', false, () {
+                  Navigator.of(context).pushNamed('/insights');
+                }),
                 const SizedBox(width: 4),
                 _buildNavItem(Icons.person_rounded, 'Profile', false, () {}),
               ],
@@ -387,11 +408,8 @@ class _JournalListScreenState extends ConsumerState<JournalListScreen> {
 
   Widget _buildJournalGrid(List<JournalEntryData> entries) {
     return ListView.builder(
-      padding: EdgeInsets.only(
-        left: 16,
-        right: 16,
-        bottom: context.bottomPadding + 80,
-      ),
+      controller: _scrollController,
+      padding: EdgeInsets.only(bottom: context.bottomPadding + 80),
       itemCount: entries.length,
       itemBuilder: (context, index) {
         return _buildJournalCard(entries[index], index == 0);
@@ -418,91 +436,80 @@ class _JournalListScreenState extends ConsumerState<JournalListScreen> {
     }
     final hasImages = imagePaths.isNotEmpty;
 
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border(
-          left: const BorderSide(color: AppColors.secondarySoft, width: 1),
-          right: const BorderSide(color: AppColors.secondarySoft, width: 1),
-          bottom: const BorderSide(color: AppColors.secondarySoft, width: 1),
-          top: isFirst
-              ? const BorderSide(color: AppColors.secondarySoft, width: 1)
-              : BorderSide.none,
+    return GestureDetector(
+      onTap: () => _showDetailScreen(entry),
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: isFirst
+              ? const BorderRadius.only(
+                  topLeft: Radius.circular(28),
+                  topRight: Radius.circular(28),
+                )
+              : BorderRadius.zero,
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.textHighContrast.withValues(alpha: 0.05),
+              blurRadius: 10,
+              offset: const Offset(0, 2),
+            ),
+          ],
         ),
-        borderRadius: isFirst
-            ? const BorderRadius.only(
-                topLeft: Radius.circular(28),
-                topRight: Radius.circular(28),
-              )
-            : null,
-      ),
-      child: ClipRRect(
-        borderRadius: isFirst
-            ? const BorderRadius.only(
-                topLeft: Radius.circular(28),
-                topRight: Radius.circular(28),
-              )
-            : BorderRadius.zero,
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildSimpleDateCard(entry.createdAt),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Header row with title, emoji on right, and action buttons
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: Text(
-                          entry.title,
-                          style: GoogleFonts.plusJakartaSans(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w700,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildSimpleDateCard(entry.createdAt),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Header row with title, mood icon, and action buttons
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            entry.title,
+                            style: GoogleFonts.plusJakartaSans(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.textHighContrast,
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Container(
+                          width: 32,
+                          height: 32,
+                          decoration: BoxDecoration(
+                            color: AppColors.secondarySoft.withValues(alpha: 0.3),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Icon(
+                            moodIcon,
+                            size: 18,
                             color: AppColors.textHighContrast,
                           ),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
                         ),
-                      ),
-                      const SizedBox(width: 8),
-                      Container(
-                        width: 32,
-                        height: 32,
-                        decoration: BoxDecoration(
-                          color: AppColors.secondarySoft.withValues(alpha: 0.3),
-                          borderRadius: BorderRadius.circular(8),
+                        const SizedBox(width: 12),
+                        _buildActionButton(
+                          Icons.edit_rounded,
+                          AppColors.accentPrimary,
+                          () => _editEntry(entry),
                         ),
-                        child: Icon(
-                          moodIcon,
-                          size: 18,
-                          color: AppColors.textHighContrast,
+                        const SizedBox(width: 8),
+                        _buildActionButton(
+                          Icons.delete_rounded,
+                          AppColors.moodAnxious,
+                          () => _deleteEntry(entry),
                         ),
-                      ),
-                      const SizedBox(width: 12),
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          _buildActionButton(
-                            Icons.edit_rounded,
-                            AppColors.accentPrimary,
-                            () => _editEntry(entry),
-                          ),
-                          const SizedBox(width: 8),
-                          _buildActionButton(
-                            Icons.delete_rounded,
-                            AppColors.moodAnxious,
-                            () => _deleteEntry(entry),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
+                      ],
+                    ),
                   // Image preview
                   if (hasImages) ...[
                     const SizedBox(height: 12),
@@ -515,6 +522,7 @@ class _JournalListScreenState extends ConsumerState<JournalListScreen> {
                           height: 180,
                           width: double.infinity,
                           fit: BoxFit.cover,
+                          cacheWidth: 800, // Optimize for thumbnail
                           errorBuilder: (context, error, stackTrace) {
                             return Container(
                               height: 180,
@@ -566,6 +574,8 @@ class _JournalListScreenState extends ConsumerState<JournalListScreen> {
                                 Image.file(
                                   File(imagePaths[imgIndex]),
                                   fit: BoxFit.cover,
+                                  cacheWidth: 400, // Optimize for grid thumbnail
+                                  gaplessPlayback: true, // Smooth loading
                                   errorBuilder: (context, error, stackTrace) {
                                     return Container(
                                       color: AppColors.secondarySoft.withValues(alpha: 0.3),
@@ -665,8 +675,26 @@ class _JournalListScreenState extends ConsumerState<JournalListScreen> {
             ),
           ],
         ),
+        ),
       ),
     );
+  }
+
+  Future<void> _showDetailScreen(JournalEntryData entry) async {
+    final result = await Navigator.of(context).push<String>(
+      MaterialPageRoute(
+        builder: (context) => JournalDetailScreen(entry: entry),
+      ),
+    );
+
+    // Handle edit or delete from detail screen
+    if (result != null && mounted) {
+      if (result == 'edit') {
+        await _editEntry(entry);
+      } else if (result == 'delete') {
+        _deleteEntry(entry);
+      }
+    }
   }
 
   /// Simplified date card - just month and day
@@ -855,15 +883,6 @@ class _JournalListScreenState extends ConsumerState<JournalListScreen> {
         ),
       ),
     );
-  }
-
-  List<JournalEntryData> _filterEntries(List<JournalEntryData> entries) {
-    if (_searchQuery.isEmpty) return entries;
-
-    return entries.where((e) =>
-      e.title.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-      _getPreviewText(e.content).toLowerCase().contains(_searchQuery.toLowerCase())
-    ).toList();
   }
 
   IconData _getMoodIcon(String mood) {

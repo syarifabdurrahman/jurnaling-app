@@ -229,3 +229,46 @@ class ResponsiveContainer extends StatelessWidget {
     );
   }
 }
+
+/// Swipe navigation wrapper for screen transitions
+class SwipeNavigator extends StatelessWidget {
+  const SwipeNavigator({
+    super.key,
+    required this.child,
+    required this.currentRoute,
+    this.onSwipeLeft,
+    this.onSwipeRight,
+  });
+
+  final Widget child;
+  final String currentRoute;
+  final VoidCallback? onSwipeLeft;
+  final VoidCallback? onSwipeRight;
+
+  // Navigation route order: left to right
+  static const List<String> _routes = ['/home', '/journal', '/insights'];
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onHorizontalDragEnd: (details) {
+        final velocity = details.primaryVelocity ?? 0;
+        // Swipe right (positive velocity) -> go to previous route
+        if (velocity > 300) {
+          final currentIndex = _routes.indexOf(currentRoute);
+          if (currentIndex > 0 && onSwipeRight != null) {
+            onSwipeRight!();
+          }
+        }
+        // Swipe left (negative velocity) -> go to next route
+        else if (velocity < -300) {
+          final currentIndex = _routes.indexOf(currentRoute);
+          if (currentIndex < _routes.length - 1 && onSwipeLeft != null) {
+            onSwipeLeft!();
+          }
+        }
+      },
+      child: child,
+    );
+  }
+}

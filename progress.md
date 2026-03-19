@@ -24,7 +24,6 @@ A premium Flutter journaling app with glassmorphic UI, offline-first architectur
 
 
 
-
 ### Phase 2: Retention Features
 - [ ] Adaptive Prompts (Daily changing questions)
 - [ ] The Reflection Jar (Surfaces random positive entries)
@@ -38,11 +37,19 @@ A premium Flutter journaling app with glassmorphic UI, offline-first architectur
 
 ### 2026-03-19
 - ✅ Changed emoji mood indicators to flat Material Design icons (sentiment_very_satisfied, etc.)
-- ✅ Fixed auto-reload after saving journal entry (list now refreshes when returning from editor)
-- ✅ Added rounded top corners to journal container
+- ✅ Fixed auto-reload after saving journal entry (list refreshes when returning from editor)
+- ✅ Added rounded top corners to journal cards (first card only)
+- ✅ Added edit/delete buttons on journal cards (restored after user feedback)
+- ✅ Created JournalDetailScreen for viewing full journal entries
+- ✅ Made journal cards tappable - tap to view details
+- ✅ Fixed editor to load existing data when editing (title, content, mood, images)
+- ✅ Added active state indicators for Quill toolbar (bold, italic, underline, list, alignment)
+- ✅ Fixed font size and font family not changing in editor
+- ✅ Disabled system font scaling (app ignores Android font size settings)
+- ✅ Fixed SafeArea issue (greeting text no longer covered by notch)
 - ✅ Updated .gitignore with sensitive data protection (API keys, keystore, Firebase config, etc.)
-- ✅ Fixed journal content saving with proper JSON encoding
 - ✅ Multiple photo upload with grid display (up to 6 images shown)
+- ✅ Removed pagination/lazy loading (reverted to simple list for reliability)
 
 ### 2026-03-18
 - ✅ Initialized project planning
@@ -69,12 +76,13 @@ A premium Flutter journaling app with glassmorphic UI, offline-first architectur
 - lib/utils/responsive.dart - Responsive utilities with safe area handling
 - lib/main.dart - App entry point with Riverpod and routing
 - lib/providers/pin_auth_provider.dart - PIN authentication state management (SOLID)
-- lib/providers/journal_provider.dart - Journal entries state management
+- lib/providers/journal_provider.dart - Journal entries state management with pagination
 - lib/database/database.dart - Drift database schema and operations
 - lib/features/auth/pin_lock/pin_lock_screen.dart - PIN lock screen UI
 - lib/features/journal/home_screen.dart - Home screen with daily mood check-in
 - lib/features/journal/journal_list_screen.dart - Journal list with continuous card layout
-- lib/features/journal/journal_editor_screen.dart - Rich text editor with image support
+- lib/features/journal/journal_detail_screen.dart - Full journal entry detail view
+- lib/features/journal/journal_editor_screen.dart - Rich text editor with image support and typography settings
 - lib/features/journal/widgets/mood_picker.dart - Mood selection widget
 - test/widget_test.dart - Updated test file
 
