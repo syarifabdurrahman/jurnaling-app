@@ -436,8 +436,6 @@ class _JournalEditorScreenState extends ConsumerState<JournalEditorScreen> {
                         children: [
                           _buildMoodPicker(context),
                           const SizedBox(height: 24),
-                          _buildImageSection(context),
-                          const SizedBox(height: 24),
                           _buildTitleField(context),
                           const SizedBox(height: 24),
                           _buildEditor(context),
@@ -858,6 +856,8 @@ class _JournalEditorScreenState extends ConsumerState<JournalEditorScreen> {
               ),
             ),
             const SizedBox(height: 12),
+            // Image preview section at bottom
+            _buildImageSection(context),
           ],
         ],
       ),

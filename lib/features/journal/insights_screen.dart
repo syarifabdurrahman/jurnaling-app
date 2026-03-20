@@ -27,6 +27,7 @@ class SwipeNavigator extends StatelessWidget {
       key: ValueKey('swipe_$currentRoute'),
       onHorizontalDragEnd: (details) {
         final velocity = details.primaryVelocity ?? 0;
+        // Only respond to horizontal swipes (left/right)
         // Swipe right (negative velocity, finger moving right) -> go to next screen
         if (velocity < -500 && onSwipeLeft != null) {
           onSwipeLeft!();
@@ -36,6 +37,8 @@ class SwipeNavigator extends StatelessWidget {
           onSwipeRight!();
         }
       },
+      // Ignore vertical swipes - let them be handled by scrollable content
+      behavior: HitTestBehavior.opaque,
       child: child,
     );
   }
