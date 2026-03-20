@@ -147,19 +147,6 @@ class _JournalEditorScreenState extends ConsumerState<JournalEditorScreen> {
     super.dispose();
   }
 
-  Future<void> _pickImage() async {
-    final List<XFile> pickedFiles = await _imagePicker.pickMultiImage(
-      maxWidth: 1920,
-      maxHeight: 1920,
-      imageQuality: 85,
-    );
-    if (pickedFiles.isNotEmpty) {
-      setState(() {
-        _selectedImages.addAll(pickedFiles.map((xFile) => File(xFile.path)));
-      });
-    }
-  }
-
   void _removeImage(int index) {
     setState(() {
       _selectedImages.removeAt(index);
@@ -535,139 +522,103 @@ class _JournalEditorScreenState extends ConsumerState<JournalEditorScreen> {
   }
 
   Widget _buildImageSection(BuildContext context) {
-    // Always show upload button and selected images
+    // Only show images when they've been added via toolbar button
+    if (_selectedImages.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Upload button
-          InkWell(
-            onTap: _pickImage,
-            borderRadius: BorderRadius.circular(20),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(
-                  color: AppColors.secondarySoft,
-                  width: 1.5,
-                  style: BorderStyle.solid,
+          // Image count header
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.image_rounded,
+                  size: 18,
+                  color: AppColors.textMuted,
                 ),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppColors.textHighContrast.withValues(alpha: 0.03),
-                    blurRadius: 20,
-                    offset: const Offset(0, 4),
+                const SizedBox(width: 8),
+                Text(
+                  '${_selectedImages.length} image${_selectedImages.length > 1 ? 's' : ''} attached',
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 13,
+                    color: AppColors.textMuted,
                   ),
-                ],
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.add_photo_alternate_rounded,
-                    color: AppColors.accentPrimary,
-                    size: 22,
-                  ),
-                  const SizedBox(width: 10),
-                  Text(
-                    'Select Photos',
-                    style: GoogleFonts.plusJakartaSans(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.textHighContrast,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  if (_selectedImages.isNotEmpty)
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: AppColors.accentPrimary,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text(
-                        '${_selectedImages.length}',
-                        style: GoogleFonts.plusJakartaSans(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
+          const SizedBox(height: 12),
           // Selected images grid
-          if (_selectedImages.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            GridView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 3,
-                crossAxisSpacing: 12,
-                mainAxisSpacing: 12,
-                childAspectRatio: 1,
-              ),
-              itemCount: _selectedImages.length,
-              itemBuilder: (context, index) {
-                return Stack(
-                  children: [
-                    Container(
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: AppColors.secondarySoft),
-                      ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(16),
-                        child: Image.file(
-                          _selectedImages[index],
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) {
-                            return Container(
-                              color: AppColors.secondarySoft.withValues(alpha: 0.3),
-                              child: const Center(
-                                child: Icon(Icons.broken_image_rounded, size: 32),
-                              ),
-                            );
-                          },
-                        ),
+          GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 3,
+              crossAxisSpacing: 12,
+              mainAxisSpacing: 12,
+              childAspectRatio: 1,
+            ),
+            itemCount: _selectedImages.length,
+            itemBuilder: (context, index) {
+              return Stack(
+                children: [
+                  Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: AppColors.secondarySoft),
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(16),
+                      child: Image.file(
+                        _selectedImages[index],
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) {
+                          return Container(
+                            color: AppColors.secondarySoft.withValues(alpha: 0.3),
+                            child: const Center(
+                              child: Icon(Icons.broken_image_rounded, size: 32),
+                            ),
+                          );
+                        },
                       ),
                     ),
-                    // Remove button
-                    Positioned(
-                      top: 4,
-                      right: 4,
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: Colors.black.withValues(alpha: 0.6),
-                          shape: BoxShape.circle,
-                        ),
-                        child: Material(
-                          color: Colors.transparent,
-                          child: InkWell(
-                            onTap: () => _removeImage(index),
-                            borderRadius: BorderRadius.circular(12),
-                            child: const Padding(
-                              padding: EdgeInsets.all(6),
-                              child: Icon(
-                                Icons.close_rounded,
-                                color: Colors.white,
-                                size: 16,
-                              ),
+                  ),
+                  // Remove button
+                  Positioned(
+                    top: 4,
+                    right: 4,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.6),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          onTap: () => _removeImage(index),
+                          borderRadius: BorderRadius.circular(12),
+                          child: const Padding(
+                            padding: EdgeInsets.all(6),
+                            child: Icon(
+                              Icons.close_rounded,
+                              color: Colors.white,
+                              size: 16,
                             ),
                           ),
                         ),
                       ),
                     ),
-                  ],
-                );
-              },
-            ),
-          ],
+                  ),
+                ],
+              );
+            },
+          ),
         ],
       ),
     );

@@ -24,6 +24,7 @@ class SwipeNavigator extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
+      key: ValueKey('swipe_$currentRoute'),
       onHorizontalDragEnd: (details) {
         final velocity = details.primaryVelocity ?? 0;
         // Swipe right (negative velocity, finger moving right) -> go to next screen

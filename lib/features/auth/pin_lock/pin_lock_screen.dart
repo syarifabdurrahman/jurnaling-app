@@ -150,35 +150,33 @@ class _PinLockScreenState extends ConsumerState<PinLockScreen>
           ),
         ),
         child: SafeArea(
-          child: Center(
-            child: ResponsivePadding(
-              child: SingleChildScrollView(
-                child: ResponsiveContainer(
-                  child: AnimatedBuilder(
-                    animation: _shakeAnimation,
-                    builder: (context, child) {
-                      return Transform.translate(
-                        offset: Offset(_shakeAnimation.value * 0.5, 0),
-                        child: child,
-                      );
-                    },
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        _buildHeader(authState),
-                        const SizedBox(height: 48),
-                        _buildPinInput(authState),
-                        if (authState.error != null) ...[
-                          const SizedBox(height: 16),
-                          _buildErrorMessage(authState.error!),
-                        ],
-                        const SizedBox(height: 32),
-                        if (authState.state == PinAuthState.settingUp)
-                          _buildSetupInfo(),
-                      ],
-                    ),
-                  ),
-                ),
+          child: ResponsivePadding(
+            child: AnimatedBuilder(
+              animation: _shakeAnimation,
+              builder: (context, child) {
+                return Transform.translate(
+                  offset: Offset(_shakeAnimation.value * 0.5, 0),
+                  child: child,
+                );
+              },
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  _buildHeader(authState),
+                  const SizedBox(height: 32),
+                  _buildPinDotsArea(authState),
+                  // Error message right below PIN dots
+                  if (authState.error != null) ...[
+                    const SizedBox(height: 12),
+                    _buildErrorMessage(authState.error!),
+                  ] else if (_isOnConfirmScreen || authState.state == PinAuthState.settingUp) ...[
+                    const SizedBox(height: 12),
+                    _buildSetupInfo(),
+                  ],
+                  const SizedBox(height: 24),
+                  // Custom Numeric Keypad
+                  _buildCustomKeypad(),
+                ],
               ),
             ),
           ),
@@ -272,49 +270,38 @@ class _PinLockScreenState extends ConsumerState<PinLockScreen>
     );
   }
 
-  Widget _buildPinInput(PinAuth authState) {
+  Widget _buildPinDotsArea(PinAuth authState) {
     final pinLength = _pinController.text.length;
 
-    return Column(
-      children: [
-        const SizedBox(height: 48),
+    // PIN Dots Display
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: List.generate(4, (index) {
+        final isActive = index < pinLength;
+        final isCurrent = index == pinLength && pinLength < 4;
 
-        // PIN Dots Display
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: List.generate(4, (index) {
-            final isActive = index < pinLength;
-            final isCurrent = index == pinLength && pinLength < 4;
-
-            return AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              margin: EdgeInsets.symmetric(horizontal: isCurrent ? 14 : 12),
-              height: 20,
-              width: isActive ? 20 : 16,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: isActive ? AppColors.accentPrimary : Colors.transparent,
-                border: Border.all(
-                  color: AppColors.accentPrimary,
-                  width: 2,
-                ),
-                boxShadow: isActive ? [
-                  BoxShadow(
-                    color: AppColors.accentPrimary.withValues(alpha: 0.5),
-                    blurRadius: 12,
-                    spreadRadius: 2,
-                  ),
-                ] : [],
+        return AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          margin: EdgeInsets.symmetric(horizontal: isCurrent ? 14 : 12),
+          height: 20,
+          width: isActive ? 20 : 16,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: isActive ? AppColors.accentPrimary : Colors.transparent,
+            border: Border.all(
+              color: AppColors.accentPrimary,
+              width: 2,
+            ),
+            boxShadow: isActive ? [
+              BoxShadow(
+                color: AppColors.accentPrimary.withValues(alpha: 0.5),
+                blurRadius: 12,
+                spreadRadius: 2,
               ),
-            );
-          }),
-        ),
-
-        const SizedBox(height: 64),
-
-        // Custom Numeric Keypad
-        _buildCustomKeypad(),
-      ],
+            ] : [],
+          ),
+        );
+      }),
     );
   }
 

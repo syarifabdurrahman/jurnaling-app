@@ -64,51 +64,37 @@ class MindFlowApp extends StatelessWidget {
         theme: AppTheme.lightTheme,
         initialRoute: '/',
         onGenerateRoute: (settings) {
-          return PageRouteBuilder(
-            settings: settings,
-            pageBuilder: (context, animation, secondaryAnimation) {
-              switch (settings.name) {
-                case '/':
-                  return const SplashScreen();
-                case '/pin':
-                  return const PinLockScreen();
-                case '/home':
-                  return const JournalHomeScreen();
-                case '/journal':
-                  return const JournalListScreen();
-                case '/insights':
-                  return const InsightsScreen();
-                case '/editor':
-                  return const JournalEditorScreen();
-                default:
-                  return const SplashScreen();
-              }
-            },
-            transitionsBuilder: (context, animation, secondaryAnimation, child) {
-              // Smooth fade + subtle slide transition
-              const curve = Curves.easeOutCubic;
-              const slideAmount = 0.03; // Very subtle slide
+          final widgets = {
+            '/': const SplashScreen(),
+            '/pin': const PinLockScreen(),
+            '/home': const JournalHomeScreen(),
+            '/journal': const JournalListScreen(),
+            '/insights': const InsightsScreen(),
+            '/editor': const JournalEditorScreen(),
+          };
 
-              var slideTween = Tween<Offset>(
-                begin: const Offset(slideAmount, 0),
-                end: Offset.zero,
-              ).chain(CurveTween(curve: curve));
+          final widget = widgets[settings.name] ?? const SplashScreen();
 
-              var fadeTween = Tween<double>(
-                begin: 0.0,
-                end: 1.0,
-              ).chain(CurveTween(curve: curve));
+          // Apply transitions only to main navigation routes
+          final useTransition = settings.name != '/' && settings.name != '/pin';
 
-              return SlideTransition(
-                position: animation.drive(slideTween),
-                child: FadeTransition(
-                  opacity: animation.drive(fadeTween),
+          if (useTransition) {
+            return PageRouteBuilder(
+              settings: settings,
+              pageBuilder: (context, animation, secondaryAnimation) => widget,
+              transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                return FadeTransition(
+                  opacity: CurveTween(curve: Curves.easeOut).animate(animation),
                   child: child,
-                ),
-              );
-            },
-            transitionDuration: const Duration(milliseconds: 250),
-            reverseTransitionDuration: const Duration(milliseconds: 200),
+                );
+              },
+              transitionDuration: const Duration(milliseconds: 200),
+            );
+          }
+
+          return MaterialPageRoute(
+            builder: (context) => widget,
+            settings: settings,
           );
         },
       ),
