@@ -18,9 +18,11 @@ class JournalEditorScreen extends ConsumerStatefulWidget {
   const JournalEditorScreen({
     super.key,
     this.entryId,
+    this.initialMood,
   });
 
   final String? entryId;
+  final String? initialMood;
 
   @override
   ConsumerState<JournalEditorScreen> createState() => _JournalEditorScreenState();
@@ -38,7 +40,27 @@ class _JournalEditorScreenState extends ConsumerState<JournalEditorScreen> {
 
   // Typography settings
   String _selectedFont = 'Plus Jakarta Sans';
-  double _fontSize = 16.0;
+  final double _fontSize = 16.0;
+
+  // Current inline font size for new text
+  String _currentSize = 'normal'; // 'small', 'normal', 'large', 'huge'
+
+  // Current text color
+  Color _currentColor = Colors.black;
+
+  // Predefined colors for text color picker
+  static const List<Color> _textColors = [
+    Colors.black,
+    Color(0xFF6B7280), // Gray
+    Color(0xFFEF4444), // Red
+    Color(0xFFF97316), // Orange
+    Color(0xFFEAB308), // Yellow
+    Color(0xFF22C55E), // Green
+    Color(0xFF06B6D4), // Cyan
+    Color(0xFF3B82F6), // Blue
+    Color(0xFF8B5CF6), // Purple
+    Color(0xFFEC4899), // Pink
+  ];
 
   @override
   void initState() {
@@ -49,6 +71,14 @@ class _JournalEditorScreenState extends ConsumerState<JournalEditorScreen> {
 
     // Listen to selection changes to update toolbar
     _quillController.addListener(_onSelectionChanged);
+
+    // Set initial mood if provided (only for new entries)
+    if (widget.entryId == null && widget.initialMood != null) {
+      _selectedMood = MoodType.values.firstWhere(
+        (m) => m.name.toLowerCase() == widget.initialMood!.toLowerCase(),
+        orElse: () => MoodType.neutral,
+      );
+    }
 
     // Load existing entry if editing
     if (widget.entryId != null) {
@@ -151,9 +181,26 @@ class _JournalEditorScreenState extends ConsumerState<JournalEditorScreen> {
     final moodValue = _selectedMood?.name ?? 'neutral';
     final contentJson = _quillController.document.toDelta().toJson();
 
+    // Extract image paths from Quill document
+    final extractedImages = <String>[];
+    for (var op in contentJson) {
+      if (op.containsKey('insert')) {
+        final insert = op['insert'];
+        if (insert is Map && insert.containsKey('image')) {
+          extractedImages.add(insert['image'] as String);
+        }
+      }
+    }
+
+    // Combine manually selected images with extracted images from Quill content
+    final allImagePaths = {
+      ..._selectedImages.map((f) => f.path),
+      ...extractedImages,
+    }.toList(); // Use Set to remove duplicates
+
     // Save image paths as JSON array
-    final imagePathsJson = _selectedImages.isNotEmpty
-        ? jsonEncode(_selectedImages.map((f) => f.path).toList())
+    final imagePathsJson = allImagePaths.isNotEmpty
+        ? jsonEncode(allImagePaths)
         : null;
 
     try {
@@ -415,12 +462,6 @@ class _JournalEditorScreenState extends ConsumerState<JournalEditorScreen> {
               ],
             ),
           ),
-          // Floating save button
-          Positioned(
-            right: 24,
-            bottom: context.bottomPadding + 24,
-            child: _buildSaveButton(context),
-          ),
         ],
       ),
     );
@@ -458,22 +499,22 @@ class _JournalEditorScreenState extends ConsumerState<JournalEditorScreen> {
             ),
           ),
           const Spacer(),
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: AppColors.secondarySoft),
-            ),
-            child: Material(
-              color: Colors.transparent,
-              child: InkWell(
-                onTap: () {
-                  // TODO: Show options
-                },
+          // Save button
+          GestureDetector(
+            onTap: _saveEntry,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              decoration: BoxDecoration(
+                color: AppColors.accentPrimary,
                 borderRadius: BorderRadius.circular(16),
-                child: const Icon(Icons.more_horiz_rounded, size: 22),
+              ),
+              child: Text(
+                'Save',
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.white,
+                ),
               ),
             ),
           ),
@@ -721,6 +762,15 @@ class _JournalEditorScreenState extends ConsumerState<JournalEditorScreen> {
                   isActive: _isFormatActive(Attribute.ul),
                 ),
                 const SizedBox(width: 8),
+                // Font size buttons for inline sizing
+                _buildSizeButton('S', () => _applySize('small')),
+                const SizedBox(width: 4),
+                _buildSizeButton('M', () => _clearSize()),
+                const SizedBox(width: 4),
+                _buildSizeButton('L', () => _applySize('large')),
+                const SizedBox(width: 4),
+                _buildSizeButton('XL', () => _applySize('huge')),
+                const SizedBox(width: 8),
                 _buildToolbarButton(Icons.text_fields_rounded, () {
                   _showTypographySettings(context);
                 }),
@@ -741,6 +791,15 @@ class _JournalEditorScreenState extends ConsumerState<JournalEditorScreen> {
                   Icons.format_align_right_rounded,
                   () => _setAlignment(Attribute.rightAlignment),
                   isActive: _isAlignmentActive(Attribute.rightAlignment),
+                ),
+                const SizedBox(width: 12),
+                // Color picker button
+                _buildColorButton(),
+                const SizedBox(width: 8),
+                // Image button
+                _buildToolbarButton(
+                  Icons.image_rounded,
+                  () => _insertImage(),
                 ),
               ],
             ),
@@ -766,10 +825,89 @@ class _JournalEditorScreenState extends ConsumerState<JournalEditorScreen> {
                     const VerticalSpacing(0, 0),
                     null,
                   ),
+                  // Add custom size styling
+                  sizeSmall: _getCurrentTextStyle().copyWith(fontSize: 12),
+                  sizeLarge: _getCurrentTextStyle().copyWith(fontSize: 20),
+                  sizeHuge: _getCurrentTextStyle().copyWith(fontSize: 28),
                 ),
               ),
             ),
           ),
+          const SizedBox(height: 16),
+          // Selected images preview
+          if (_selectedImages.isNotEmpty) ...[
+            // Image preview header
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.image_rounded,
+                    size: 18,
+                    color: AppColors.textMuted,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    '${_selectedImages.length} image${_selectedImages.length > 1 ? 's' : ''} attached',
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 13,
+                      color: AppColors.textMuted,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            // Image preview list
+            Container(
+              constraints: const BoxConstraints(maxHeight: 150),
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: _selectedImages.length,
+                separatorBuilder: (_, __) => const SizedBox(width: 12),
+                itemBuilder: (context, index) {
+                  final image = _selectedImages[index];
+                  return Stack(
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: Image.file(
+                          image,
+                          width: 120,
+                          height: 120,
+                          fit: BoxFit.cover,
+                        ),
+                      ),
+                      Positioned(
+                        top: 4,
+                        right: 4,
+                        child: GestureDetector(
+                          onTap: () {
+                            setState(() {
+                              _selectedImages.removeAt(index);
+                            });
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withValues(alpha: 0.6),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.close,
+                              color: Colors.white,
+                              size: 16,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
         ],
       ),
     );
@@ -833,30 +971,33 @@ class _JournalEditorScreenState extends ConsumerState<JournalEditorScreen> {
                 ],
               ),
               const SizedBox(height: 24),
-              // Font Size
-              Text(
-                'Font Size: ${_fontSize.toInt()}',
-                style: GoogleFonts.plusJakartaSans(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.textMuted,
+              // Note about inline sizes
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppColors.accentPrimary.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
                 ),
-              ),
-              const SizedBox(height: 12),
-              Slider(
-                value: _fontSize,
-                min: 12,
-                max: 24,
-                divisions: 12,
-                activeColor: AppColors.accentPrimary,
-                onChanged: (value) {
-                  setModalState(() {
-                    _fontSize = value;
-                  });
-                  setState(() {
-                    _fontSize = value;
-                  });
-                },
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.info_outline_rounded,
+                      size: 16,
+                      color: AppColors.accentPrimary,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Use S/M/L/XL buttons for inline font sizes',
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                          color: AppColors.accentPrimary,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
               const SizedBox(height: 24),
               // Preview
@@ -1008,6 +1149,82 @@ class _JournalEditorScreenState extends ConsumerState<JournalEditorScreen> {
     );
   }
 
+  // Build font size button
+  Widget _buildSizeButton(String label, VoidCallback onTap) {
+    // Each button has a unique size value
+    final sizeValue = _getSizeValue(label);
+    // Only active if current size matches this button's value
+    final isActive = _currentSize == sizeValue;
+
+    return Container(
+      key: ValueKey('size_$label'),
+      width: 32,
+      height: 32,
+      decoration: BoxDecoration(
+        color: isActive ? AppColors.accentPrimary : Colors.transparent,
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(6),
+          child: Center(
+            child: Text(
+              label,
+              style: GoogleFonts.plusJakartaSans(
+                fontSize: label == 'S' ? 10 : label == 'M' ? 12 : label == 'L' ? 14 : 16,
+                fontWeight: FontWeight.w700,
+                color: isActive ? Colors.white : AppColors.textMuted,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // Get size value attribute string for Quill
+  String _getSizeValue(String label) {
+    switch (label) {
+      case 'S': return 'small';
+      case 'L': return 'large';
+      case 'XL': return 'huge';
+      case 'M': return 'normal';
+      default: return 'normal';
+    }
+  }
+
+  // Apply inline font size to selected text and set for new text
+  void _applySize(String size) {
+    // Store current size for new text
+    setState(() {
+      _currentSize = size;
+    });
+
+    // Apply format at current position (works for selection and cursor)
+    final sizeAttr = Attribute(Attribute.size.key, AttributeScope.inline, size);
+    _quillController.formatSelection(sizeAttr);
+
+    // Move focus back to editor
+    _editorFocus.requestFocus();
+  }
+
+  // Clear size from selected text (back to default)
+  void _clearSize() {
+    // Set to normal (default) size
+    setState(() {
+      _currentSize = 'normal';
+    });
+
+    // Remove size attribute at current position
+    final sizeAttr = Attribute(Attribute.size.key, AttributeScope.inline, null);
+    _quillController.formatSelection(sizeAttr);
+
+    // Move focus back to editor
+    _editorFocus.requestFocus();
+  }
+
   // Check if a format attribute is active at current selection
   bool _isFormatActive(Attribute attribute) {
     final style = _quillController.getSelectionStyle();
@@ -1017,23 +1234,22 @@ class _JournalEditorScreenState extends ConsumerState<JournalEditorScreen> {
   // Check if an alignment attribute is active
   bool _isAlignmentActive(Attribute attribute) {
     final style = _quillController.getSelectionStyle();
-    return style.attributes.containsKey(attribute.key);
+    // Get the alignment attribute from the style (all alignments use same key)
+    for (final attr in style.attributes.values) {
+      if (attr.key == Attribute.leftAlignment.key) {
+        // Compare the actual alignment value
+        return attr.value == attribute.value;
+      }
+    }
+    return false;
   }
 
   // Toggle a format attribute
   void _toggleFormat(Attribute attribute) {
     if (_isFormatActive(attribute)) {
-      _quillController.formatText(
-        _quillController.selection.start,
-        _quillController.selection.end - _quillController.selection.start,
-        Attribute.clone(attribute, null),
-      );
+      _quillController.formatSelection(Attribute.clone(attribute, null));
     } else {
-      _quillController.formatText(
-        _quillController.selection.start,
-        _quillController.selection.end - _quillController.selection.start,
-        attribute,
-      );
+      _quillController.formatSelection(attribute);
     }
     // Refresh UI to show updated active state
     setState(() {});
@@ -1041,13 +1257,117 @@ class _JournalEditorScreenState extends ConsumerState<JournalEditorScreen> {
 
   // Set text alignment
   void _setAlignment(Attribute alignment) {
-    _quillController.formatText(
-      _quillController.selection.start,
-      _quillController.selection.end - _quillController.selection.start,
-      alignment,
-    );
+    _quillController.formatSelection(alignment);
     // Refresh UI to show updated active state
     setState(() {});
+  }
+
+  // Apply text color
+  void _applyColor(Color color) {
+    setState(() {
+      _currentColor = color;
+    });
+    // Convert color to hex format for Quill
+    final colorHex = '#${color.toARGB32().toRadixString(16).padLeft(8, '0').substring(2)}';
+    final colorAttr = Attribute(Attribute.color.key, AttributeScope.inline, colorHex);
+    _quillController.formatSelection(colorAttr);
+    _editorFocus.requestFocus();
+  }
+
+  // Show color picker
+  void _showColorPicker() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Text Color', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w600)),
+        content: SizedBox(
+          width: 280,
+          height: 120,
+          child: GridView.builder(
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 5,
+              crossAxisSpacing: 8,
+              mainAxisSpacing: 8,
+            ),
+            itemCount: _textColors.length,
+            itemBuilder: (context, index) {
+              final color = _textColors[index];
+              final isSelected = _currentColor == color;
+              return GestureDetector(
+                onTap: () {
+                  _applyColor(color);
+                  Navigator.pop(context);
+                },
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: color,
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: isSelected ? AppColors.accentPrimary : Colors.grey.shade300,
+                      width: isSelected ? 3 : 2,
+                    ),
+                  ),
+                  child: isSelected
+                      ? const Icon(Icons.check, color: Colors.white, size: 16)
+                      : null,
+                ),
+              );
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Cancel', style: GoogleFonts.plusJakartaSans()),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Build color button showing current color
+  Widget _buildColorButton() {
+    return Container(
+      width: 40,
+      height: 40,
+      decoration: BoxDecoration(
+        color: AppColors.secondarySoft.withValues(alpha: 0.4),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () => _showColorPicker(),
+          borderRadius: BorderRadius.circular(12),
+          child: Center(
+            child: Container(
+              width: 24,
+              height: 24,
+              decoration: BoxDecoration(
+                color: _currentColor,
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.grey.shade400, width: 1),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // Insert image at cursor position
+  Future<void> _insertImage() async {
+    final List<XFile> images = await _imagePicker.pickMultiImage();
+    if (images.isNotEmpty) {
+      setState(() {
+        for (var image in images) {
+          _selectedImages.add(File(image.path));
+        }
+      });
+
+      // Focus back to editor to continue writing
+      _editorFocus.requestFocus();
+    }
   }
 
   TextStyle _getCurrentTextStyle() {
@@ -1061,46 +1381,6 @@ class _JournalEditorScreenState extends ConsumerState<JournalEditorScreen> {
     }
   }
 
-  Widget _buildSaveButton(BuildContext context) {
-    return Container(
-      height: 56,
-      decoration: BoxDecoration(
-        color: AppColors.accentPrimary,
-        borderRadius: BorderRadius.circular(28),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.accentPrimary.withValues(alpha: 0.3),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: _saveEntry,
-          borderRadius: BorderRadius.circular(28),
-          child: const Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              SizedBox(width: 20),
-              Icon(Icons.check_rounded, color: Colors.white, size: 24),
-              SizedBox(width: 12),
-              Text(
-                'Save',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.white,
-                ),
-              ),
-              SizedBox(width: 20),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
 }
 
 /// Mood types for journal entries

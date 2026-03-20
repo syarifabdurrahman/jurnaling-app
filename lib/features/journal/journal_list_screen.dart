@@ -12,6 +12,40 @@ import '../../database/database.dart';
 import 'journal_editor_screen.dart';
 import 'journal_detail_screen.dart';
 
+/// Swipe navigation widget for smooth screen transitions
+class SwipeNavigator extends StatelessWidget {
+  final Widget child;
+  final VoidCallback? onSwipeLeft;
+  final VoidCallback? onSwipeRight;
+  final String currentRoute;
+
+  const SwipeNavigator({
+    super.key,
+    required this.child,
+    this.onSwipeLeft,
+    this.onSwipeRight,
+    required this.currentRoute,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onHorizontalDragEnd: (details) {
+        final velocity = details.primaryVelocity ?? 0;
+        // Swipe right (negative velocity, finger moving right) -> go to next screen
+        if (velocity < -500 && onSwipeLeft != null) {
+          onSwipeLeft!();
+        }
+        // Swipe left (positive velocity, finger moving left) -> go to previous screen
+        else if (velocity > 500 && onSwipeRight != null) {
+          onSwipeRight!();
+        }
+      },
+      child: child,
+    );
+  }
+}
+
 /// Journal list screen with search and card layout
 class JournalListScreen extends ConsumerStatefulWidget {
   const JournalListScreen({super.key});

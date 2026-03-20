@@ -5,6 +5,41 @@ import '../../constants/colors.dart';
 import '../../utils/responsive.dart';
 import '../../providers/journal_provider.dart';
 import '../../providers/journal_statistics_provider.dart';
+import 'journal_editor_screen.dart';
+
+/// Swipe navigation widget for smooth screen transitions
+class SwipeNavigator extends StatelessWidget {
+  final Widget child;
+  final VoidCallback? onSwipeLeft;
+  final VoidCallback? onSwipeRight;
+  final String currentRoute;
+
+  const SwipeNavigator({
+    super.key,
+    required this.child,
+    this.onSwipeLeft,
+    this.onSwipeRight,
+    required this.currentRoute,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onHorizontalDragEnd: (details) {
+        final velocity = details.primaryVelocity ?? 0;
+        // Swipe right (negative velocity, finger moving right) -> go to next screen
+        if (velocity < -500 && onSwipeLeft != null) {
+          onSwipeLeft!();
+        }
+        // Swipe left (positive velocity, finger moving left) -> go to previous screen
+        else if (velocity > 500 && onSwipeRight != null) {
+          onSwipeRight!();
+        }
+      },
+      child: child,
+    );
+  }
+}
 
 /// Home screen - Daily mood check-in in card format
 class JournalHomeScreen extends ConsumerStatefulWidget {
@@ -16,14 +51,6 @@ class JournalHomeScreen extends ConsumerStatefulWidget {
 
 class _JournalHomeScreenState extends ConsumerState<JournalHomeScreen> {
   String? _todayMood;
-
-  // Get today's date formatted
-  String get _todayDate {
-    final now = DateTime.now();
-    const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-    const weekdays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-    return '${weekdays[now.weekday - 1]}, ${months[now.month - 1]} ${now.day}';
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -195,9 +222,7 @@ class _JournalHomeScreenState extends ConsumerState<JournalHomeScreen> {
 
   /// Daily Journal Card with mood check-in
   Widget _buildDailyJournalCard() {
-    final now = DateTime.now();
-    final hasTodayEntry = _hasEntryForToday(now);
-
+    _hasEntryForToday(DateTime.now()); // Check entry for analytics
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 24),
       width: double.infinity,
@@ -285,10 +310,15 @@ class _JournalHomeScreenState extends ConsumerState<JournalHomeScreen> {
           setState(() {
             _todayMood = label;
           });
-          // Navigate to editor to write journal
+          // Navigate to editor to write journal with selected mood
           Future.delayed(const Duration(milliseconds: 200), () async {
             if (!mounted) return;
-            final result = await Navigator.of(context).pushNamed('/editor');
+            // Import here to avoid circular dependency
+            final result = await Navigator.of(context).push<bool>(
+              MaterialPageRoute(
+                builder: (context) => JournalEditorScreen(initialMood: label),
+              ),
+            );
             // Refresh journal entries when returning from editor
             if (result == true && mounted) {
               ref.invalidate(journalEntriesProvider);

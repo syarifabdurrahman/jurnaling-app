@@ -6,6 +6,40 @@ import '../../utils/responsive.dart';
 import '../../providers/journal_statistics_provider.dart';
 import '../../database/database.dart';
 
+/// Swipe navigation widget for smooth screen transitions
+class SwipeNavigator extends StatelessWidget {
+  final Widget child;
+  final VoidCallback? onSwipeLeft;
+  final VoidCallback? onSwipeRight;
+  final String currentRoute;
+
+  const SwipeNavigator({
+    super.key,
+    required this.child,
+    this.onSwipeLeft,
+    this.onSwipeRight,
+    required this.currentRoute,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onHorizontalDragEnd: (details) {
+        final velocity = details.primaryVelocity ?? 0;
+        // Swipe right (negative velocity, finger moving right) -> go to next screen
+        if (velocity < -500 && onSwipeLeft != null) {
+          onSwipeLeft!();
+        }
+        // Swipe left (positive velocity, finger moving left) -> go to previous screen
+        else if (velocity > 500 && onSwipeRight != null) {
+          onSwipeRight!();
+        }
+      },
+      child: child,
+    );
+  }
+}
+
 /// Insights screen - Streaks, Stats, and Calendar
 class InsightsScreen extends ConsumerStatefulWidget {
   const InsightsScreen({super.key});

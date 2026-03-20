@@ -22,8 +22,6 @@ A premium Flutter journaling app with glassmorphic UI, offline-first architectur
 | Muted Text | #6B7280 | Soft gray for secondary info |
 | Secondary Soft | #E5E7EB | Borders and dividers |
 
-
-
 ### Phase 2: Retention Features
 - [ ] Adaptive Prompts (Daily changing questions)
 - [ ] The Reflection Jar (Surfaces random positive entries)

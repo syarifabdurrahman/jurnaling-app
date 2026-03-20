@@ -25,7 +25,6 @@ class AppTheme {
         onSecondary: Colors.white,
         onSurface: AppColors.textHighContrast, // Dark slate
         onError: Colors.white,
-        background: AppColors.background, // Ivory
       ),
 
       // Scaffold

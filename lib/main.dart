@@ -57,19 +57,59 @@ class MindFlowApp extends StatelessWidget {
     return MediaQuery(
       // Disable system font scaling - keep app font sizes consistent
       // Preserve all other MediaQuery data (padding, size, etc.)
-      data: MediaQuery.of(context).copyWith(textScaleFactor: 1.0),
+      data: MediaQuery.of(context).copyWith(textScaler: const TextScaler.linear(1.0)),
       child: MaterialApp(
         title: 'MindFlow',
         debugShowCheckedModeBanner: false,
         theme: AppTheme.lightTheme,
         initialRoute: '/',
-        routes: {
-          '/': (context) => const SplashScreen(),
-          '/pin': (context) => const PinLockScreen(),
-          '/home': (context) => const JournalHomeScreen(),
-          '/journal': (context) => const JournalListScreen(),
-          '/insights': (context) => const InsightsScreen(),
-          '/editor': (context) => const JournalEditorScreen(),
+        onGenerateRoute: (settings) {
+          return PageRouteBuilder(
+            settings: settings,
+            pageBuilder: (context, animation, secondaryAnimation) {
+              switch (settings.name) {
+                case '/':
+                  return const SplashScreen();
+                case '/pin':
+                  return const PinLockScreen();
+                case '/home':
+                  return const JournalHomeScreen();
+                case '/journal':
+                  return const JournalListScreen();
+                case '/insights':
+                  return const InsightsScreen();
+                case '/editor':
+                  return const JournalEditorScreen();
+                default:
+                  return const SplashScreen();
+              }
+            },
+            transitionsBuilder: (context, animation, secondaryAnimation, child) {
+              // Smooth fade + subtle slide transition
+              const curve = Curves.easeOutCubic;
+              const slideAmount = 0.03; // Very subtle slide
+
+              var slideTween = Tween<Offset>(
+                begin: const Offset(slideAmount, 0),
+                end: Offset.zero,
+              ).chain(CurveTween(curve: curve));
+
+              var fadeTween = Tween<double>(
+                begin: 0.0,
+                end: 1.0,
+              ).chain(CurveTween(curve: curve));
+
+              return SlideTransition(
+                position: animation.drive(slideTween),
+                child: FadeTransition(
+                  opacity: animation.drive(fadeTween),
+                  child: child,
+                ),
+              );
+            },
+            transitionDuration: const Duration(milliseconds: 250),
+            reverseTransitionDuration: const Duration(milliseconds: 200),
+          );
         },
       ),
     );
